@@ -22,7 +22,7 @@ args = [
 ]
 ```
 
-The `--pdfium-library` option enables PDF rasterization through Pdfium. Use the matching library file for your platform (`.so`, `.dylib`, or `.dll`); image input needs no Pdfium. Package that library alongside the plugin or point to a system installation. The `ort` build downloads ONNX Runtime and copies its dynamic library next to the binary; ship both files.
+The `--pdfium-library` option enables PDF rasterization through Pdfium. Use the matching library file for your platform (`.so`, `.dylib`, or `.dll`); image input needs no Pdfium. Package that library alongside the plugin or point to a system installation. The `ort` build obtains ONNX Runtime for the target platform; inspect the resulting binary's library dependencies when packaging it.
 
 ## OCR request
 
