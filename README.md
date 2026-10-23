@@ -31,7 +31,7 @@ curl -F model=datalab/indra-ocr -F file=@document.pdf \
   http://127.0.0.1:10000/v1/documents/ocr
 ```
 
-Multipart fields are `model`, `file`, `response_format` (`json`, `text`, or `markdown`), and `max_pages` (`0` means every page). Inputs are PDF or a supported image format. The maximum file size is 64 MiB. JSON returns the model ID and page indexed `text`, `markdown`, `lines` with boxes and confidence, and ordered layout `blocks`. Errors use `error.message`.
+Multipart fields are `model`, `file`, `response_format` (`json`, `text`, or `markdown`), and `max_pages` (`0` processes up to 1,000 pages; explicit limits must be between 1 and 1,000). Inputs are PDF or a supported image format. The maximum file size is 64 MiB. PDF pages render at 200 DPI, capped at 4,096 pixels per dimension, and are recognized one at a time. JSON returns the model ID and page indexed `text`, `markdown`, `lines` with boxes and confidence, and ordered layout `blocks`. Errors use `error.message`.
 
 The native port currently runs Indra's orientation model, detector, script classifier, base and script specific recognizers, and reading order and layout models. It does not yet reproduce all upstream postprocessing. On the pinned scanned page, this implementation detects 35 lines and 8 layout blocks; upstream Indra reports 36 lines and 9 blocks. The functional tests pin the native results and key text so regressions are visible while that gap is closed. The [Mesh core OCR work](https://github.com/Mesh-LLM/mesh-llm) adds workload-aware discovery and routing for this endpoint.
 

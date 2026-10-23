@@ -183,9 +183,36 @@ fn decode_order(logits: &[f32], n: usize) -> Vec<usize> {
                     })
                     .sum::<f32>()
             };
-            let best = (0..=rest.len())
-                .max_by(|&a, &b| gain(a).total_cmp(&gain(b)))
-                .unwrap_or(current);
+            let mut running_gain = rest
+                .iter()
+                .map(|&other| f64::from(probability[line * n + other]))
+                .sum::<f64>();
+            let mut gains = Vec::with_capacity(rest.len() + 1);
+            gains.push(running_gain);
+            let mut magnitude = 0.0;
+            for &other in &rest {
+                // Moving past one line changes only this pair's contribution.
+                let before = f64::from(probability[other * n + line]);
+                let after = f64::from(probability[line * n + other]);
+                running_gain += before - after;
+                gains.push(running_gain);
+                magnitude += before.abs().max(after.abs());
+            }
+            // Bound the original f32 sums' rounding error, including subnormals.
+            // Recheck ambiguous candidates with the original summation order so
+            // near ties, last-position tie breaking, and the threshold stay exact.
+            // Well-separated gains need only one O(n) verification; ambiguous or
+            // non-finite inputs retain the original O(n²) worst case.
+            let error = 2.0
+                * (rest.len() + 1) as f64
+                * (f64::from(f32::EPSILON) * magnitude + f64::from(f32::from_bits(1)));
+            let largest = gains.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            let finite = error.is_finite() && gains.iter().all(|gain| gain.is_finite());
+            let best = (0..gains.len())
+                .filter(|&position| !finite || gains[position] >= largest - 2.0 * error)
+                .map(|position| (position, gain(position)))
+                .max_by(|(_, a), (_, b)| a.total_cmp(b))
+                .map_or(current, |(position, _)| position);
             if gain(best) > gain(current) + 1e-6 {
                 order = rest;
                 order.insert(best, line);
@@ -247,5 +274,38 @@ mod tests {
     fn pairwise_decoder_follows_order_logits() {
         let logits = [0.0, 3.0, 3.0, -3.0, 0.0, 3.0, -3.0, -3.0, 0.0];
         assert_eq!(decode_order(&logits, 3), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn pairwise_decoder_preserves_last_tied_insertion() {
+        let logits = [
+            3.0, -3.0, 3.0, 3.0, 3.0, 3.0, -3.0, 3.0, -3.0, 0.0, -3.0, -3.0, 3.0, 0.0, 0.0, -3.0,
+        ];
+        assert_eq!(decode_order(&logits, 4), vec![1, 0, 3, 2]);
+    }
+
+    #[test]
+    fn pairwise_decoder_preserves_original_rounding_near_threshold() {
+        // This matrix diverges under a plain incremental f32 gain scan.
+        let mut seed = 972845047165077966_u64;
+        let logits = (0..100)
+            .map(|_| {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                (seed >> 32) as i32 as f32 / i32::MAX as f32 * 10.0
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            decode_order(&logits, 10),
+            vec![8, 1, 4, 6, 9, 7, 2, 5, 3, 0]
+        );
+    }
+
+    #[test]
+    fn pairwise_decoder_keeps_order_without_an_improvement() {
+        assert!(decode_order(&[], 0).is_empty());
+        assert_eq!(decode_order(&[0.0], 1), vec![0]);
+        for value in [0.0, f32::NEG_INFINITY, f32::INFINITY, f32::NAN] {
+            assert_eq!(decode_order(&[value; 9], 3), vec![0, 1, 2]);
+        }
     }
 }

@@ -105,11 +105,14 @@ impl Engine {
         })
     }
 
-    pub fn recognize_document(&mut self, pages: &[GrayImage]) -> Result<Document> {
+    pub fn recognize_document(
+        &mut self,
+        pages: impl IntoIterator<Item = Result<GrayImage>>,
+    ) -> Result<Document> {
         let pages = pages
-            .iter()
+            .into_iter()
             .enumerate()
-            .map(|(index, image)| self.recognize_image(image, index))
+            .map(|(index, image)| self.recognize_image(&image?, index))
             .collect::<Result<Vec<_>>>()?;
         Ok(Document {
             model: MODEL,
